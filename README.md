@@ -18,5 +18,4 @@ This directory provides an MCP-style HTTP server that exposes trace diagnosis **
 From the repository root:
 
 ```bash
-docker build -f Trace_mcp/Dockerfile -t trace-mcp-server .
-docker run -p 8889:8889 trace-mcp-server
+npx @modelcontextprotocol/inspector python -m app.main
