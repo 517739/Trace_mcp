@@ -6,7 +6,7 @@ from typing import *
 # 实验配置（训练/评估运行所需参数与路径）
 class ExpConfig(mltk.Config):
     # 基础训练配置
-    device: str = 'cuda'
+    device: str = 'cpu'
     dataset: str = 'dataset_demo'
     # 提示：为了快速验证可以把 test_dataset 暂时设为 'val'，正式评估应为 'test'
     test_dataset: str = 'test'
