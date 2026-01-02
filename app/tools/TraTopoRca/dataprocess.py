@@ -20,7 +20,7 @@ def precompute_host_states(trace_graphs, output_dir, id_manager, W=3):
     metrics = list(DEFAULT_METRICS)
     # for m in DISK_METRICS: # 如需开启磁盘指标请取消注释
     #     if m not in metrics: metrics.append(m)
-    per_metric_dims = 3 
+    per_metric_dims = 4
 
     success_count = 0
     for graph in tqdm(trace_graphs, desc="Pre-computing HostStates"):
