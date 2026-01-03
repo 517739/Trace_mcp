@@ -74,10 +74,11 @@ class TrainDataset(DGLDataset):
         # load host topology disabled on training side (no one-hop topo approx)
         self.host_adj = {}
         # load infra index for sequence (OmniAnomaly backend)
-        try:
-            self.infra_index_seq = load_infra_for_seq(processed_dir)
-        except Exception:
-            self.infra_index_seq = None
+        # try:
+        #     self.infra_index_seq = load_infra_for_seq(processed_dir)
+        # except Exception:
+        #     self.infra_index_seq = None
+        self.infra_index_seq = None # 直接设为 None，强制只用预计算数据
 
         if not valid:
             self.train_db = TraceGraphDB(BytesSqliteDB(os.path.join(processed_dir, 'train')))
@@ -192,6 +193,20 @@ class TrainDataset(DGLDataset):
         """Attach per-host sequences [W,D] for OmniAnomaly backend as g.host_seq.
         Uses config.HostChannel.seq_window and seq_metrics.
         """
+        # === [新增优化] 优先检查是否有预计算数据 ===
+        # 如果 graph.data 里已经有算好的 Tensor，直接拿来用
+        precomputed_seq = graph.data.get('precomputed_host_seq', None)
+        if precomputed_seq is not None:
+            # 直接挂载到 dgl_graph 上，无需任何计算
+            try:
+                dgl_graph.host_seq = precomputed_seq
+            except Exception:
+                # 兼容旧版 DGL 写法
+                if not hasattr(dgl_graph, 'graph_data'):
+                    dgl_graph.graph_data = {}
+                dgl_graph.graph_data['host_seq'] = precomputed_seq
+            return
+        
         try:
             hc_cfg = getattr(self.config, 'HostChannel', None)
             if not hc_cfg or not bool(getattr(hc_cfg, 'enable', False)):
@@ -330,10 +345,11 @@ class TestDataset(DGLDataset):
         except Exception:
             self.host_adj = {}
         # load infra index for sequence (OmniAnomaly backend)
-        try:
-            self.infra_index_seq = load_infra_for_seq(processed_dir)
-        except Exception:
-            self.infra_index_seq = None
+        # try:
+        #     self.infra_index_seq = load_infra_for_seq(processed_dir)
+        # except Exception:
+        #     self.infra_index_seq = None
+        self.infra_index_seq = None # 直接设为 None，强制只用预计算数据
 
         # Show info
         logger.info(f'{len(self.test_db)} in test dataset.')

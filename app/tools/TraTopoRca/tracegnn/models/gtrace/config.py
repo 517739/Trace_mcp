@@ -6,7 +6,7 @@ from typing import *
 # 实验配置（训练/评估运行所需参数与路径）
 class ExpConfig(mltk.Config):
     # 基础训练配置
-    device: str = 'cpu'
+    device: str = 'cuda'
     dataset: str = 'dataset_topo'
     # 提示：为了快速验证可以把 test_dataset 暂时设为 'val'，正式评估应为 'test'
     test_dataset: str = 'test'
@@ -16,7 +16,7 @@ class ExpConfig(mltk.Config):
     test_batch_size: int = 64
     # Maximum number of traces to evaluate (None or <=0 means no limit)
     max_eval_traces: Optional[int] = None
-    max_epochs: int = 10
+    max_epochs: int = 1
     enable_tqdm: bool = True
 
     # 数据集根目录（相对工程根目录或绝对路径）
