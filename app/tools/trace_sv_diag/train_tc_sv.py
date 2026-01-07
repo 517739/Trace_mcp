@@ -64,8 +64,8 @@ def train_epoch(model, loader, opt, device, criterion, C):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data-root", default="dataset/tianchi/processed_1229")
-    ap.add_argument("--save_dir", default="dataset/tianchi/processed/1224", help="摘要与图片输出目录")
+    ap.add_argument("--data-root", default="dataset/tianchi/processed_0103")
+    ap.add_argument("--save_dir", default="dataset/tianchi/processed_0103/0103", help="摘要与图片输出目录")
     ap.add_argument("--task", choices=["coarse", "fine", "superfine"], default="superfine")
     ap.add_argument("--min-type-support", type=int, default=0,
                     help="细类（fine）最小样本数，低于此阈值的类别不参与训练期与评测期的细类报告")

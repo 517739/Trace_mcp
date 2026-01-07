@@ -17,3 +17,10 @@ app/tools/TraTopoRca/tracegnn/models/gtrace/models/__pycache__/*
 app/tools/TraTopoRca/tracegnn/utils/__pycache__/*
 app/tools/TraTopoRca/tracegnn/utils/hostutils/__pycache__/*
 app/tools/TraTopoRca/score_distribution_debug.csv
+
+app/dataset/tianchi/.env
+app/dataset/tianchi/data/*
+app/dataset/tianchi/src/__pycache__/*
+app/dataset/tianchi/src/agents/__pycache__/*
+app/dataset/tianchi/src/utils/__pycache__/*
+app/dataset/tianchi/tools/__pycache__/*

@@ -202,8 +202,8 @@ def parse_args():
     ap = argparse.ArgumentParser()
     # 天池版：默认从 row/Normal.csv 和 row/Service_fault.csv 读取
     ap.add_argument("--normal", default="dataset/tianchi/row/Normal.csv")
-    ap.add_argument("--fault",  default="dataset/tianchi/row/Service_fault.csv")
-    ap.add_argument("--outdir", default="dataset/tianchi/processed_1229")
+    ap.add_argument("--fault",  default="/root/wzc/tianchi/data/ServiceFault/all_fault_traces.csv")
+    ap.add_argument("--outdir", default="dataset/tianchi/processed_0103")
     ap.add_argument("--label-scheme", choices=["superfine"], default="superfine")
     ap.add_argument("--id-cols", nargs=3, default=["TraceID", "SpanId", "ParentID"])
     ap.add_argument("--svc-col", default="ServiceName")

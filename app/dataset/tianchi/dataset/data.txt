@@ -1,0 +1,5 @@
+(trace_vae) PS E:\ZJU\AIOps\Projects\TraDNN\tianchi\scripts> python .\split_traces_by_anomaly.py
+处理完成：
+  正常 Trace 写入: ..\dataset\Normal.csv，共 69972 条 trace
+  节点故障 Trace 写入: ..\dataset\Node_fault.csv，共 253 条 trace
+  服务故障 Trace 写入: ..\dataset\Service_fault.csv，共 3854 条 trace

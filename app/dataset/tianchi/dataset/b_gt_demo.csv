@@ -1,0 +1,7 @@
+problem_id,start_time,end_time,instance_type,instance,fault_type
+002,2025-09-16 23:20:33,2025-09-16 23:30:33,service,product-catalog,cpu
+003,2025-09-16 23:44:03,2025-09-17 00:00:05,service,shipping,cpu
+012,2025-09-17 05:46:13,2025-09-17 05:52:07,service,currency,cpu
+015,2025-09-17 08:41:32,2025-09-17 08:47:26,service,payment,memory
+016,2025-09-17 09:02:26,2025-09-17 09:18:22,service,shipping,memory
+017,2025-09-17 09:33:22,2025-09-17 09:44:16,service,quote,cpu
