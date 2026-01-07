@@ -1,0 +1,1 @@
+TraceID,SpanId,ParentID,NodeName,ServiceName,PodName,URL,HttpStatusCode,StatusCode,SpanKind,StartTimeMs,EndTimeMs,fault_type,fault_instance
