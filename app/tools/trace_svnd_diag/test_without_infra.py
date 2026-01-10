@@ -142,9 +142,10 @@ def evaluate_and_print_filtered(model, loader, device, type_names, keep_types):
 def main():
     parser = argparse.ArgumentParser("AIOps Trace Multi-Head Test")
     # === 参数 ===
-    parser.add_argument("--data-root", type=str, default="dataset/aiops_svnd", help="数据集目录")
-    # 注意：这里改名为 model-path 以符合你的统一标准，之前是 --ckpt
-    parser.add_argument("--model-path", type=str, default="dataset/aiops_svnd/1019/aiops_nodectx_multihead.pt", help="模型权重路径")
+    # parser.add_argument("--data-root", type=str, default="dataset/aiops_svnd", help="数据集目录")
+    # parser.add_argument("--model-path", type=str, default="dataset/aiops_svnd/1019/aiops_nodectx_multihead.pt", help="模型权重路径")
+    parser.add_argument("--data-root", type=str, default="dataset/tianchi", help="数据集目录")
+    parser.add_argument("--model-path", type=str, default="dataset/tianchi/0108/aiops_nodectx_multihead.pt", help="模型权重路径")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--seed", type=int, default=2025)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")

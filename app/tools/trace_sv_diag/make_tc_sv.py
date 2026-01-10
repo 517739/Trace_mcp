@@ -195,15 +195,52 @@ def flatten_to_csv(path, items):
             })
     pd.DataFrame(rows).to_csv(path, index=False, encoding="utf-8")
 
+def drop_orphan_traces(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    [Step 1.5] 删除断链的 Trace (允许 1 个根节点悬浮)
+    """
+    if df.empty: return df
+    
+    print(f"   🧹 正在检查 Trace 完整性 (允许 1 个根节点悬浮)...")
+    valid_indices = []
+    explicit_root_pids = {"", "nan", "None", "null", "-1", "0"}
+    
+    grouped = df.groupby("TraceID", sort=False)
+    total_traces = 0
+    dropped_traces = 0
+    
+    for tid, g in grouped:
+        total_traces += 1
+        span_ids = set(g["SpanId"])
+        dangling_count = 0
+        
+        for pid in g["ParentID"]:
+            pid_str = str(pid).strip()
+            if pid_str in span_ids: continue
+            if pid_str in explicit_root_pids: continue
+            dangling_count += 1
+        
+        if dangling_count <= 1:
+            valid_indices.extend(g.index)
+        else:
+            dropped_traces += 1
+            
+    if len(valid_indices) == len(df):
+        print(f"      ✨ 所有 Trace 均结构完整。")
+        return df
+    
+    print(f"      丢弃了 {dropped_traces} 条破碎 Trace (保留率: {100 - dropped_traces/total_traces*100:.2f}%)")
+    return df.loc[valid_indices].reset_index(drop=True)
+
 
 # --------------------------- CLI ---------------------------
 
 def parse_args():
     ap = argparse.ArgumentParser()
     # 天池版：默认从 row/Normal.csv 和 row/Service_fault.csv 读取
-    ap.add_argument("--normal", default="dataset/tianchi/row/Normal.csv")
-    ap.add_argument("--fault",  default="/root/wzc/tianchi/data/ServiceFault/all_fault_traces.csv")
-    ap.add_argument("--outdir", default="dataset/tianchi/processed_0103")
+    ap.add_argument("--normal", default="/root/wzc/Trace_mcp/app/dataset/tianchi/data/NormalData/normal_traces.csv")
+    ap.add_argument("--fault",  default="/root/wzc/Trace_mcp/app/dataset/tianchi/data/ServiceFault/all_fault_traces.csv")
+    ap.add_argument("--outdir", default="dataset/tianchi/processed_0110")
     ap.add_argument("--label-scheme", choices=["superfine"], default="superfine")
     ap.add_argument("--id-cols", nargs=3, default=["TraceID", "SpanId", "ParentID"])
     ap.add_argument("--svc-col", default="ServiceName")
@@ -218,6 +255,9 @@ def parse_args():
     ap.add_argument("--val-ratio", type=float, default=0.1)
     ap.add_argument("--min-trace-size", type=int, default=2)
     ap.add_argument("--seed", type=int, default=2025)
+
+    ap.add_argument("--drop-orphans", type=int, default=1, help="1=开启断链Trace过滤，0=关闭（默认开启）")
+
     return ap.parse_args()
 
 
@@ -236,6 +276,12 @@ def main():
 
     normal = pd.read_csv(args.normal)
     fault = pd.read_csv(args.fault)
+
+    # 2. 新增：执行悬浮节点过滤（核心修改）
+    if args.drop_orphans:
+        print("[Step 1/5] 过滤断链Trace...")
+        normal = drop_orphan_traces(normal)
+        fault = drop_orphan_traces(fault)
 
     # 预构建 superfine 标签表：直接基于故障行的 FaultCategory（小写去空格）
     ft_series = fault.get(args.fault_type_col, pd.Series([None] * len(fault)))

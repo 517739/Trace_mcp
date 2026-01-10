@@ -20,9 +20,9 @@ from model import TraceClassifier
 
 def main():
     ap = argparse.ArgumentParser("AIOps Multi-Head Training")
-    ap.add_argument("--data-root", default="dataset/aiops_svnd")
-    ap.add_argument("--save_dir",  default="dataset/aiops_svnd/1019", help="摘要与图片输出目录")
-    ap.add_argument("--save_pt",   default="dataset/aiops_svnd/1019/aiops_nodectx_multihead.pt", help="ckpt 路径")
+    ap.add_argument("--data-root", default="dataset/tianchi")
+    ap.add_argument("--save_dir",  default="dataset/tianchi/0108", help="摘要与图片输出目录")
+    ap.add_argument("--save_pt",   default="dataset/tianchi/0108/aiops_nodectx_multihead.pt", help="ckpt 路径")
     ap.add_argument("--type_min_support", type=int, default=200, help="细类参与训练/评测的最小支持数")
     ap.add_argument("--epochs", type=int, default=20)
     ap.add_argument("--batch", type=int, default=64)
