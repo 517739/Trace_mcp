@@ -12,7 +12,7 @@ import argparse
 import torch
 from torch.utils.data import DataLoader
 
-from utils import (
+from utils_sv import (
     set_seed,
     TraceDataset,
     collate_multi,
@@ -20,7 +20,7 @@ from utils import (
     evaluate_detailed,
     print_per_class_reports,
 )
-from model import TraceClassifier
+from model_sv import TraceClassifier
 
 try:
     # 保留兼容，但本脚本内部目前未使用 tqdm

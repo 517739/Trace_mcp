@@ -11,12 +11,12 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from utils import (
+from utils_sv import (
     set_seed, TraceDataset, collate_multi, vocab_sizes_from_meta,
     derive_keep_types, evaluate_detailed, print_per_class_reports,
     collect_per_class_reports, save_run_summary, save_ckpt
 )
-from model import TraceClassifier
+from model_sv import TraceClassifier
 
 def main():
     ap = argparse.ArgumentParser("AIOps Multi-Head Training")
@@ -127,7 +127,7 @@ def main():
 
     # 保存 run_summary.json
     os.makedirs(args.save_dir, exist_ok=True)
-    from utils import save_run_summary, save_ckpt
+    from app.tools.trace_svnd_diag.utils_sv import save_run_summary, save_ckpt
     reports = collect_per_class_reports(model, te_loader, device, type_names, keep_types=keep_types)
     save_run_summary(save_dir=args.save_dir, args=vars(args), data_root=args.data_root,
                      metrics_dict=metrics, reports_dict=reports,

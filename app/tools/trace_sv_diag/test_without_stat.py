@@ -4,8 +4,8 @@ import torch.nn as nn
 from collections import Counter
 import numpy as np  # 确保导入 numpy
 
-from utils import set_seed, TraceDataset, collate, vocab_sizes_from_meta
-from model import TraceClassifier
+from utils_sv import set_seed, TraceDataset, collate, vocab_sizes_from_meta
+from model_sv import TraceClassifier
 
 @torch.no_grad()
 def evaluate_and_save_fine(model, loader, device, class_names, keep_types, out_dir):

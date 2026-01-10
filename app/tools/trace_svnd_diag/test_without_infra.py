@@ -12,10 +12,10 @@ import os, argparse, torch, tempfile
 import numpy as np
 from torch.utils.data import DataLoader
 
-from utils import (
+from utils_sv import (
     set_seed, TraceDataset, collate_multi, vocab_sizes_from_meta
 )
-from model import TraceClassifier
+from model_sv import TraceClassifier
 
 def create_temp_subset(src_path, limit):
     """

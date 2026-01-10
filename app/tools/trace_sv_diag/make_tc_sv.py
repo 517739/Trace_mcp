@@ -15,7 +15,7 @@ from collections import Counter, defaultdict
 import numpy as np
 import pandas as pd
 
-from utils import (
+from utils_sv import (
     url_template, make_api_key,
     STRUCTURAL_TYPES, LATENCY_TYPES, FINE_GROUPS, FINE_LABELS, FINE_INDEX
 )

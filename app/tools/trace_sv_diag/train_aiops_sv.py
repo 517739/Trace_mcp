@@ -6,8 +6,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from utils import *
-from model import TraceClassifier, TreeLSTMReadout
+from utils_sv import *
+from model_sv import TraceClassifier, TreeLSTMReadout
 
 def accuracy(logits, y):
     return (logits.argmax(1) == y).float().mean().item()

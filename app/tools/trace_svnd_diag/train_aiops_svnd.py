@@ -13,7 +13,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from utils import (
+from utils_sv import (
     set_seed,
     TraceDataset,
     collate_multi,
@@ -25,7 +25,7 @@ from utils import (
     save_run_summary,
     save_ckpt,
 )
-from model import TraceClassifier
+from model_sv import TraceClassifier
 
 
 def main():

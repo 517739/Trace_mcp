@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import dgl
 from dgl import DGLError
 from dgl.nn import GraphConv
-from utils import enforce_dag_parent
+from utils_sv import enforce_dag_parent
 
 class ChildSumTreeLSTMOp(nn.Module):
     def __init__(self, x_size):
