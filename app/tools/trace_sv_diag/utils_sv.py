@@ -295,15 +295,22 @@ def evaluate_detailed(model, loader, device, class_names, save_csv_path=None):
     total_loss, n = 0.0, 0
 
     for batch in loader:
-        g, y = batch[0], batch[1]
-        g = g.to(device); y = y.to(device)
-        logits = model(g)
-        loss = ce(logits, y)
-        b = y.size(0)
-        total_loss += loss.item() * b
-        n += b
-        all_logits.append(logits.detach().cpu())
-        all_labels.append(y.detach().cpu())
+            g, y = batch[0], batch[1]
+            g = g.to(device); y = y.to(device)
+            out = model(g)
+            
+            # === 修复：处理字典输出 ===
+            if isinstance(out, dict):
+                logits = out["logits_type"] # 取细分类头
+            else:
+                logits = out
+                
+            loss = ce(logits, y)
+            b = y.size(0)
+            total_loss += loss.item() * b
+            n += b
+            all_logits.append(logits.detach().cpu())
+            all_labels.append(y.detach().cpu())
 
     if n == 0:
         print("[evaluate_detailed] empty loader."); return
@@ -373,7 +380,13 @@ def evaluate_and_save_superfine(model, loader, device, class_names, keep_types, 
 
     for g, y, *_ in loader:
         g = g.to(device); y = y.to(device)
-        logits = model(g)
+        out = model(g)
+                
+        # === 修复：处理字典输出 ===
+        if isinstance(out, dict):
+            logits = out["logits_type"]
+        else:
+            logits = out
         loss = ce(logits, y); b = y.size(0)
         total_loss += loss.item() * b; n += b
         all_logits.append(logits.detach().cpu()); all_labels.append(y.detach().cpu())

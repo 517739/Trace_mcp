@@ -195,6 +195,72 @@ def flatten_to_csv(path, items):
             })
     pd.DataFrame(rows).to_csv(path, index=False, encoding="utf-8")
 
+
+# [新增 1] 核心统计函数 (计算 Trace 级的宏观指标)
+def per_trace_core_service(df_t: pd.DataFrame) -> dict:
+    # 找到入口服务 (Root Span) 或耗时最长的服务作为代表
+    # 简单起见，这里取第一行作为代表 (通常是 Root)
+    root = df_t.iloc[0]
+    
+    # 计算 Trace 内部指标
+    http_codes = pd.to_numeric(df_t["status_id"], errors='coerce').fillna(0).values # 假设已转ID，或用原始StatusCode
+    is_err = (http_codes >= 400) # 简单判断
+    err_rate = is_err.mean()
+    
+    return {
+        "TraceID": root["TraceID"],
+        "EntryService": root["ServiceName"], #以此为 Key 计算上下文
+        "trace_tmid": (root["StartTimeMs"] + root["EndTimeMs"]) / 2.0,
+        "err_rate": err_rate,
+        "duration": root["DurationMs"]
+    }
+
+# [新增 2] 上下文计算函数 (移植自 svnd，但改为按服务分组)
+def build_service_context(records, win_minutes=3.0):
+    print("⏳ [Corrected] Calculating Service Context...")
+    # 1. 转为 DataFrame 方便计算
+    rows = []
+    for r in records:
+        root = r["nodes"][0] # 假设第一个节点包含了所需信息
+        # 简单计算 trace 级指标
+        err_count = sum(1 for nd in r["nodes"] if nd["status_id"] > 1) # 假设 >1 是异常状态
+        err_rate = err_count / len(r["nodes"])
+        rows.append({
+            "tid": r["trace_id"],
+            "svc": root["service"],
+            "time": root["start_ms"],
+            "err_rate": err_rate
+        })
+    
+    df = pd.DataFrame(rows).sort_values("time")
+    
+    # 2. 计算 Context
+    ctx_map = {}
+    W_ms = win_minutes * 60 * 1000.0
+    
+    for svc, g in tqdm(df.groupby("svc"), desc="Service Context"):
+        times = g["time"].values
+        errs = g["err_rate"].values
+        
+        # 滑动窗口
+        left_idxs = np.searchsorted(times, times - W_ms, side='left')
+        curr_idxs = np.arange(len(times))
+        counts = curr_idxs - left_idxs + 1
+        
+        # 简单指标：QPS (Trace数) 和 平均错误率
+        # 优化：使用 cumsum 计算区间和
+        err_cumsum = np.cumsum(np.concatenate(([0], errs)))
+        err_sum = err_cumsum[curr_idxs + 1] - err_cumsum[left_idxs]
+        win_err_rate = err_sum / counts
+        
+        # 归一化 QPS (log1p)
+        qps_feat = np.log1p(counts)
+        
+        for i, tid in enumerate(g["tid"]):
+            # Context 向量：[qps_norm, win_err_rate] (维度=2)
+            ctx_map[tid] = [float(qps_feat[i]), float(win_err_rate[i])]
+            
+    return ctx_map, 2
 def drop_orphan_traces(df: pd.DataFrame) -> pd.DataFrame:
     """
     [Step 1.5] 删除断链的 Trace (允许 1 个根节点悬浮)
@@ -296,6 +362,7 @@ def main():
     api_vocab, status_vocab = {}, {}
 
     # 正常样本（固定 coarse=0，superfine 不使用，最终在 superfine 任务中会被过滤掉）
+    print("Building records...")
     rec_normal = build_records(
         normal, cols, api_vocab, status_vocab,
         label_scheme=args.label_scheme,
@@ -315,6 +382,20 @@ def main():
     )
 
     traces = rec_normal + rec_fault
+
+    print("Calculating Context...")
+    ctx_map, ctx_dim = build_service_context(traces)
+    
+    valid_traces = []
+    for r in traces:
+        tid = r["trace_id"]
+        # 写入 ctx
+        r["ctx"] = ctx_map.get(tid, [0.0]*ctx_dim)
+        valid_traces.append(r)
+        
+    traces = valid_traces
+    print(f"Total traces: {len(traces)}, Context Dim: {ctx_dim}")
+
     random.shuffle(traces)
     n = len(traces)
     n_tr = int(n * args.train_ratio)
@@ -328,10 +409,10 @@ def main():
     dump_jsonl(os.path.join(args.outdir, "val.jsonl"),   val)
     dump_jsonl(os.path.join(args.outdir, "test.jsonl"),  test)
 
-    # 扁平 CSV
-    flatten_to_csv(os.path.join(args.outdir, "traces_flat_train.csv"), train)
-    flatten_to_csv(os.path.join(args.outdir, "traces_flat_val.csv"),   val)
-    flatten_to_csv(os.path.join(args.outdir, "traces_flat_test.csv"),  test)
+    # # 扁平 CSV
+    # flatten_to_csv(os.path.join(args.outdir, "traces_flat_train.csv"), train)
+    # flatten_to_csv(os.path.join(args.outdir, "traces_flat_val.csv"),   val)
+    # flatten_to_csv(os.path.join(args.outdir, "traces_flat_test.csv"),  test)
 
     # 统计分布
     def count(items, key):
@@ -354,7 +435,7 @@ def main():
             "latency_types": sorted(list(LATENCY_TYPES)),
             "superfine_label_map": superfine_map,
             "superfine_classes": superfine_names,
-            "label_scheme": args.label_scheme
+            "ctx_dim": ctx_dim
         }, f, ensure_ascii=False, indent=2)
 
     # brief.txt（简单统计）

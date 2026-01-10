@@ -80,7 +80,7 @@ class TraceClassifier(nn.Module):
     """GCN + TreeLSTM，图读出拼接 → 分类头"""
     def __init__(self, api_vocab, status_vocab, num_classes,
                  emb=32, gc_hidden=64, tlstm_out=64, cls_hidden=64,
-                 ignore_loops=False, debug_dump_path: str = None):
+                 ignore_loops=False, debug_dump_path: str = None, ctx_dim=0):
         super().__init__()
         self.api_emb    = nn.Embedding(api_vocab + 1, emb)
         self.status_emb = nn.Embedding(status_vocab + 1, emb)
@@ -94,8 +94,26 @@ class TraceClassifier(nn.Module):
         self.treelstm = TreeLSTMReadout(gc_hidden, tlstm_out,
                                         ignore_loops=ignore_loops,
                                         debug_dump_path=debug_dump_path)
-        self.readout = nn.Sequential(nn.Linear(gc_hidden + tlstm_out, cls_hidden),
-                                     nn.ReLU(), nn.Linear(cls_hidden, num_classes))
+        # 2. 定义上下文映射层
+        self.ctx_mlp = None
+        if ctx_dim > 0:
+            self.ctx_mlp = nn.Sequential(
+                nn.Linear(ctx_dim, 32),
+                nn.ReLU(),
+                nn.Dropout(0.1)
+            )
+        # self.readout = nn.Sequential(nn.Linear(gc_hidden + tlstm_out, cls_hidden),
+        #                              nn.ReLU(), nn.Linear(cls_hidden, num_classes))
+        fuse_dim = gc_hidden + tlstm_out + (32 if ctx_dim > 0 else 0)
+        
+        self.readout = nn.Sequential(
+            nn.Linear(fuse_dim, cls_hidden),
+            nn.ReLU(),
+            nn.Linear(cls_hidden, num_classes) # 注意：新脚本会用多头，这里可能需要拆分
+        )
+        # 建议拆分为多头以对齐 SVND (见下文)
+        self.head_bin = nn.Linear(cls_hidden, 1)
+        self.head_type = nn.Linear(cls_hidden, num_classes)
 
     def forward(self, g: dgl.DGLGraph):
         api    = self.api_emb(g.ndata["api_id"])
@@ -129,4 +147,23 @@ class TraceClassifier(nn.Module):
         tl = self.treelstm(g_tree, x, trace_id=tid)
         g.ndata["tl"] = tl
         mean_tl = dgl.mean_nodes(g, "tl")
-        return self.readout(torch.cat([mean_x, mean_tl], dim=-1))
+
+        features = [mean_x, mean_tl]
+
+        if self.ctx_mlp is not None and "ctx" in g.ndata:
+            # ctx 在全图节点上是相同的，取平均即可拿到图级向量
+            ctx_vec = dgl.mean_nodes(g, "ctx")
+            ctx_feat = self.ctx_mlp(ctx_vec)
+            features.append(ctx_feat)
+
+        # 5. 拼接
+        fused = torch.cat(features, dim=-1)
+        
+        # 6. 多头输出
+        hidden = self.readout[0](fused) # 先过第一层 Linear
+        hidden = self.readout[1](hidden) # ReLU
+        
+        return {
+            "logit_bin": self.head_bin(hidden).squeeze(-1),
+            "logits_type": self.head_type(hidden)
+        }
