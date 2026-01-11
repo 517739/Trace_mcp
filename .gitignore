@@ -25,3 +25,5 @@ app/dataset/tianchi/src/__pycache__/*
 app/dataset/tianchi/src/agents/__pycache__/*
 app/dataset/tianchi/src/utils/__pycache__/*
 app/dataset/tianchi/tools/__pycache__/*
+
+.serena/*
