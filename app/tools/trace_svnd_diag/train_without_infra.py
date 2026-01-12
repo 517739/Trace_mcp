@@ -11,18 +11,21 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from utils_sv import (
+from utils_svnd import (
     set_seed, TraceDataset, collate_multi, vocab_sizes_from_meta,
     derive_keep_types, evaluate_detailed, print_per_class_reports,
     collect_per_class_reports, save_run_summary, save_ckpt
 )
-from model_sv import TraceClassifier
+from model_svnd import TraceClassifier
 
 def main():
     ap = argparse.ArgumentParser("AIOps Multi-Head Training")
+    # ap.add_argument("--data-root", default="dataset/aiops_svnd")
+    # ap.add_argument("--save_dir",  default="dataset/aiops_svnd/1019", help="摘要与图片输出目录")
+    # ap.add_argument("--save_pt",   default="dataset/aiops_svnd/1019/aiops_nodectx_multihead.pt", help="ckpt 路径")
     ap.add_argument("--data-root", default="dataset/tianchi")
     ap.add_argument("--save_dir",  default="dataset/tianchi/0108", help="摘要与图片输出目录")
-    ap.add_argument("--save_pt",   default="dataset/tianchi/0108/aiops_nodectx_multihead.pt", help="ckpt 路径")
+    ap.add_argument("--save_pt",   default="dataset/tianchi/0108/model.pt", help="ckpt 路径")
     ap.add_argument("--type_min_support", type=int, default=200, help="细类参与训练/评测的最小支持数")
     ap.add_argument("--epochs", type=int, default=20)
     ap.add_argument("--batch", type=int, default=64)
@@ -32,6 +35,8 @@ def main():
     ap.add_argument("--no-progress", action="store_true", default=False)
     ap.add_argument("--early_stop_patience", type=int, default=5)
     ap.add_argument("--early_stop_min_delta", type=float, default=1e-4)
+
+    ap.add_argument("--exclude-normal", type=bool, default=True, help="在报告和加权平均中排除 'normal' 类")
     args = ap.parse_args()
 
     set_seed(args.seed)
@@ -127,7 +132,6 @@ def main():
 
     # 保存 run_summary.json
     os.makedirs(args.save_dir, exist_ok=True)
-    from app.tools.trace_svnd_diag.utils_sv import save_run_summary, save_ckpt
     reports = collect_per_class_reports(model, te_loader, device, type_names, keep_types=keep_types)
     save_run_summary(save_dir=args.save_dir, args=vars(args), data_root=args.data_root,
                      metrics_dict=metrics, reports_dict=reports,

@@ -12,10 +12,10 @@ import os, argparse, torch, tempfile
 import numpy as np
 from torch.utils.data import DataLoader
 
-from utils_sv import (
+from utils_svnd import (
     set_seed, TraceDataset, collate_multi, vocab_sizes_from_meta
 )
-from model_sv import TraceClassifier
+from model_svnd import TraceClassifier
 
 def create_temp_subset(src_path, limit):
     """
@@ -41,7 +41,7 @@ def create_temp_subset(src_path, limit):
     return tf.name
 
 @torch.no_grad()
-def evaluate_and_print_filtered(model, loader, device, type_names, keep_types):
+def evaluate_and_print_filtered(model, loader, device, type_names, keep_types, exclude_normal=False):
     """
     自定义评测函数：只打印 Support > 0 (实际出现过) 的类别，保持输出整洁。
     """
@@ -106,6 +106,9 @@ def evaluate_and_print_filtered(model, loader, device, type_names, keep_types):
     
     for i, real_id in enumerate(target_indices):
         name = type_names[real_id]
+
+        if exclude_normal and name.lower() == "normal":
+            continue
         tp = int(cm[i, i])
         support = int(cm[i, :].sum())
         predcnt = int(cm[:, i].sum())
@@ -145,12 +148,13 @@ def main():
     # parser.add_argument("--data-root", type=str, default="dataset/aiops_svnd", help="数据集目录")
     # parser.add_argument("--model-path", type=str, default="dataset/aiops_svnd/1019/aiops_nodectx_multihead.pt", help="模型权重路径")
     parser.add_argument("--data-root", type=str, default="dataset/tianchi", help="数据集目录")
-    parser.add_argument("--model-path", type=str, default="dataset/tianchi/0108/aiops_nodectx_multihead.pt", help="模型权重路径")
+    parser.add_argument("--model-path", type=str, default="dataset/tianchi/0108/model.pt", help="模型权重路径")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--seed", type=int, default=2025)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--limit", type=int, default=None, help="仅测试前N条数据")
     parser.add_argument("--split", type=str, default="test", choices=["train", "val", "test"])
+    parser.add_argument("--exclude-normal", type=bool, default=True, help="在报告和加权平均中排除 'normal' 类")
 
     args = parser.parse_args()
     set_seed(args.seed)
@@ -199,7 +203,7 @@ def main():
     
     # 5. 运行评测
     print(f"\n[Eval] Running on {args.limit if args.limit else 'ALL'} samples ...")
-    evaluate_and_print_filtered(model, loader, device, type_names, keep_types)
+    evaluate_and_print_filtered(model, loader, device, type_names, keep_types, exclude_normal=args.exclude_normal)
     print("\n[OK] Test finished.")
 
 if __name__ == "__main__":
