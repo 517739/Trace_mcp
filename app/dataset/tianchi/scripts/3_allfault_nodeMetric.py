@@ -84,7 +84,7 @@ class BatchCustomMetricFetcher:
     def fetch_metrics_for_problem(self, row):
         problem_id = row['problem_id']
         fault_type = row.get('fault_type', 'unknown')
-        start_ts = self._parse_time(row['start_time']) - 180  # 提前3分钟，防止数据缺失
+        start_ts = self._parse_time(row['start_time']) - 180 # 提前3分钟，防止数据缺失
         end_ts = self._parse_time(row['end_time'])
         
         print(f"\n🚀 [Problem {problem_id}] 处理中... ({row['start_time']} ~ {row['end_time']})")
@@ -336,7 +336,7 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", default="data/NodeMetric", help="自定义输出目录")
     
     # 🔥 新增参数
-    parser.add_argument("--interval", type=int, default=10, help="[可选] 重采样时间间隔(秒)，例如 60 表示每分钟一条")
+    parser.add_argument("--interval", type=int, default=30, help="重采样时间间隔(秒)，例如 60 表示每分钟一条")
     
     args = parser.parse_args()
     fetcher = BatchCustomMetricFetcher(args.csv, args.output_dir, args.unified, args.interval)

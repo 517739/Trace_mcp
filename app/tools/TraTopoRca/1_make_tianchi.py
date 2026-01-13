@@ -19,10 +19,10 @@ from tqdm import tqdm
 # NODE_DIR    = '/root/wzc/aiops25/SplitTrace0611/node/2025-06-08_09_10_11_spans.csv'
 # OUT_DIR     = 'dataset/dataset_08_09_10_11/raw'
 
-NORMAL_DIR = '/root/wzc/Trace_mcp/app/dataset/tianchi/data/NormalData/normal_traces2e5_mapped.csv'
+NORMAL_DIR = '/root/wzc/Trace_mcp/app/dataset/tianchi/data/NormalData/normal_traces1e5_30s_mapped.csv'
 SERVICE_DIR = '/root/wzc/Trace_mcp/app/dataset/tianchi/data/ServiceFault/all_fault_traces_mapped.csv'
 NODE_DIR    = '/root/wzc/Trace_mcp/app/dataset/tianchi/data/NodeFault/all_fault_traces_mapped.csv'
-OUT_DIR     = 'dataset/tianchi/0112/raw'
+OUT_DIR     = 'dataset/tianchi/0113/raw'
 
 # 新的默认参数
 TOTAL_TRACES_DEFAULT = 80000         # 总trace数量

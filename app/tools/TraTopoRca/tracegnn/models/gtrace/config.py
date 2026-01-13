@@ -7,7 +7,7 @@ from typing import *
 class ExpConfig(mltk.Config):
     # 基础训练配置
     device: str = 'cuda'
-    dataset: str = 'dataset_topo'
+    dataset: str = '0112'
     # 提示：为了快速验证可以把 test_dataset 暂时设为 'val'，正式评估应为 'test'
     test_dataset: str = 'test'
     seed: int = 1234
@@ -20,14 +20,12 @@ class ExpConfig(mltk.Config):
     enable_tqdm: bool = True
 
     # 数据集根目录（相对工程根目录或绝对路径）
-    dataset_root_dir: str = 'dataset'
+    dataset_root_dir: str = 'dataset/tianchi'
     # 模型权重保存/读取路径：
-    # - 绝对路径：直接使用
-    # - 相对路径：默认相对于 dataset_root_dir/dataset，例如 'save/model.pth'
     model_path: str = 'save/tracebert/model.pth'
 
     # 报告输出目录（相对 processed 目录或绝对路径）
-    report_dir: str = 'reports_0102'
+    report_dir: str = 'reports_0112'
     include_epoch_in_report_name: bool = True  # 报告文件名中是否包含 epoch 序号
 
     # 模型相关配置
@@ -82,7 +80,8 @@ class ExpConfig(mltk.Config):
 
         # 'omni' 模式：分钟级窗口与指标
         seq_window: int = 15                 # 回看窗口 W（分钟）
-        seq_metrics: List[str] = ['cpu', 'mem', 'fs']  # 指标别名
+        # seq_metrics: List[str] = ['cpu', 'mem', 'fs']  # 指标别名
+        seq_metrics: List[str] = ['cpu', 'mem', 'disk', 'net']
         # 模型维度（两种后端通用）
         hidden_dim: int = 64                 # 主机头隐藏维度
         latent_dim: int = 16                 # 主机头潜变量维度
@@ -92,10 +91,17 @@ class ExpConfig(mltk.Config):
     # 主机状态特征（评估/训练端）
     class HostState(mltk.Config):
         enable: bool = True                 # 是否启用 host_state 特征
+        # metrics: List[str] = [
+        #     'node_cpu_usage_rate',
+        #     'node_memory_usage_rate',
+        #     'node_filesystem_usage_rate',
+        # ]
+
         metrics: List[str] = [
-            'node_cpu_usage_rate',
-            'node_memory_usage_rate',
-            'node_filesystem_usage_rate',
+            "aggregate_node_cpu_usage",
+            "aggregate_node_memory_usage",
+            "aggregate_node_disk_io_usage",
+            "aggregate_node_net_receive_packages_errors_per_minute"
         ]
         include_disk: bool = False          # 是否包含磁盘时间类指标
         W: int = 3                          # 回看窗口（分钟）

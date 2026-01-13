@@ -13,9 +13,10 @@ from tracegnn.data.trace_graph_db import TraceGraphDB, BytesSqliteDB
 from tracegnn.utils.host_state import host_state_vector
 
 # ================= 配置区域 =================
-DEFAULT_DATASET_ROOT = 'dataset/tianchi/0112' 
+DEFAULT_DATASET_ROOT = 'dataset/tianchi/0113' 
 # 指标文件名，请确保这与你 3_allfault_nodeMetric.py 生成的文件名一致
-INFRA_FILENAME = 'all_metrics_10s.csv' 
+NORMAL_METRIC_FILE = 'normal_metrics_1e5_30s.csv'  # 用于 Train/Val 集
+FAULT_METRIC_FILE  = 'all_metrics_30s.csv'     # 用于 Test 集
 
 # Host Sequence 配置 (需与 dataset.py / config.py 保持一致)
 SEQ_WINDOW = 15
@@ -47,25 +48,38 @@ def flexible_load_trace_csv(input_path: str) -> pd.DataFrame:
         print(f"加载CSV出错 {input_path}: {e}")
         return pd.DataFrame()
 
-def load_infra_data_from_parent(dataset_root: str):
-    """
-    加载并解析指标数据，适配天池数据格式
-    """
+def load_infra_data_from_parent(dataset_root: str, filename: str):
     parent_dir = os.path.dirname(dataset_root.rstrip(os.path.sep))
-    infra_path = os.path.join(parent_dir, INFRA_FILENAME)
     
-    # 尝试在不同位置查找文件
-    if not os.path.exists(infra_path):
-        infra_path_alt = os.path.join(parent_dir, 'infra', INFRA_FILENAME)
-        if os.path.exists(infra_path_alt): infra_path = infra_path_alt
+    # [修改] 使用传入的 filename 构建路径
+    infra_path = os.path.join(dataset_root, filename)
     
-    # 尝试查找 data 目录 (通常是 step 2/3 的输出目录)
-    if not os.path.exists(infra_path):
-        infra_path_alt2 = os.path.join(parent_dir, 'data', INFRA_FILENAME)
-        if os.path.exists(infra_path_alt2): infra_path = infra_path_alt2
+    # 定义查找路径列表 (按优先级排序)
+    paths_to_try = [
+        # 1. 当前 dataset_root 下
+        os.path.join(dataset_root, filename),
+        
+        # 2. [新增] 直接在父目录下查找 (e.g. dataset/tianchi/normal_metric.csv)
+        os.path.join(parent_dir, filename),
+        
+        # 3. 在 dataset_root/data 下 (NormalData输出目录常见位置)
+        os.path.join(dataset_root, 'data', filename),
+        os.path.join(dataset_root, 'NormalData', filename),
+        
+        # 4. 在 parent_dir/data 下
+        os.path.join(parent_dir, 'data', filename),
+        os.path.join(parent_dir, 'infra', filename),
+    ]
 
-    if not os.path.exists(infra_path):
-        print(f"⚠️ 警告: 未找到指标数据文件。期望路径: {infra_path}")
+    infra_path = None
+    for p in paths_to_try:
+        if os.path.exists(p):
+            infra_path = p
+            break
+
+    if not infra_path:
+        print(f"⚠️ 警告: 未找到指标数据文件: {filename}")
+        # print(f"   已尝试路径: {paths_to_try}") # 调试时可开启
         return None
     
     print(f"✅ 已加载指标数据: {infra_path}")
@@ -120,8 +134,17 @@ def precompute_host_states(trace_graphs, infra_index, id_manager, W=3):
     metrics = TIANCHI_METRICS
     per_metric_dims = 4  # mean, std, max, min
 
+    stats = {
+        "total_graphs": len(trace_graphs),
+        "processed_graphs": 0,
+        "total_spans_with_host": 0,  # 有 HostID 的 Span 总数
+        "failed_metric_spans": 0,    # 映射失败的 Span 总数
+        "missing_hosts": set()       # 缺失数据的 Host 集合
+    }
+
     for graph in tqdm(trace_graphs, desc="预计算 HostState (GNN)"):
         try:
+            stats["processed_graphs"] += 1
             st = graph.root.spans[0].start_time if (graph.root and graph.root.spans) else None
             if isinstance(st, (int, float)):
                 v = float(st)
@@ -130,19 +153,58 @@ def precompute_host_states(trace_graphs, infra_index, id_manager, W=3):
                 t0_ms = 0
             t0_min_ms = (t0_ms // 60000) * 60000
             
-            host_ids = set(node.host_id for _, node in graph.iter_bfs() if node.host_id and node.host_id > 0)
+            # 找出该 Trace 中所有涉及的 Host 节点
+            # iter_bfs 返回 (node_id, node_obj) 或者 node_obj，取决于具体实现
+            # 这里假设 graph.iter_bfs() 返回 (_, node)
+            nodes_in_graph = [node for _, node in graph.iter_bfs() if node.host_id and node.host_id > 0]
+            
+            host_ids = set(node.host_id for node in nodes_in_graph)
             host_state_map = {}
+            
             for hid in host_ids:
                 hname = id_manager.host_id.rev(int(hid))
                 if hname:
-                    # host_state_vector 会去 metrics 字典里找对应的 key
+                    # 尝试获取指标向量
                     vec = host_state_vector(hname, infra_index, t0_min_ms, metrics=metrics, W=W, per_metric_dims=per_metric_dims)
                     if vec is not None:
                         host_state_map[hid] = vec
+                    else:
+                        # [统计] 记录缺失数据的 Host
+                        stats["missing_hosts"].add(hname)
+            
             if host_state_map:
                 graph.data['precomputed_host_state'] = host_state_map
+            
+            # [统计] 计算 Span 级别的缺失情况
+            for node in nodes_in_graph:
+                stats["total_spans_with_host"] += 1
+                if node.host_id not in host_state_map:
+                    stats["failed_metric_spans"] += 1
+
         except Exception:
             continue
+
+    # [新增] 输出统计报告
+    print("\n" + "="*50)
+    print("📊 [GNN 特征映射统计报告]")
+    print(f"   - 总图数: {stats['total_graphs']}")
+    print(f"   - 涉及物理机的 Span 总数: {stats['total_spans_with_host']}")
+    print(f"   - ❌ 指标映射失败 Span 数: {stats['failed_metric_spans']}")
+    
+    if stats['total_spans_with_host'] > 0:
+        fail_rate = stats['failed_metric_spans'] / stats['total_spans_with_host'] * 100
+        print(f"   - 📉 失败率: {fail_rate:.2f}%")
+        if fail_rate > 0:
+            print(f"   - ⚠️ 警告: 有 {fail_rate:.2f}% 的 Span 无法关联到性能指标！")
+    
+    if stats["missing_hosts"]:
+        print(f"   - 缺失数据的 Host 数量: {len(stats['missing_hosts'])}")
+        preview = list(stats['missing_hosts'])[:3]
+        print(f"   - 缺失 Host 示例: {preview} ...")
+        print("   -> 请检查 3_allfault_nodeMetric.py 的获取窗口是否足够覆盖这些 Trace 的时间点")
+    else:
+        print("   - ✅ 所有 Host 均成功匹配到指标数据")
+    print("="*50 + "\n")
 
 # === 2. HostSequence 预计算 (OmniAnomaly) ===
 def precompute_host_sequences(trace_graphs, infra_index, id_manager):
@@ -284,6 +346,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', type=str, default=DEFAULT_DATASET_ROOT)
     args = parser.parse_args()
+
+
     
     dataset_root = args.root
     print(f"🚀 开始处理数据流 (适配天池指标)，根目录: {dataset_root}")
@@ -291,7 +355,9 @@ def main():
     os.makedirs(processed_root, exist_ok=True)
     
     # 1. 加载指标数据
-    infra_index = load_infra_data_from_parent(dataset_root)
+    print(f"\n[步骤 0/4] 加载指标文件...")
+    normal_infra_index = load_infra_data_from_parent(dataset_root, NORMAL_METRIC_FILE)
+    fault_infra_index = load_infra_data_from_parent(dataset_root, FAULT_METRIC_FILE)
     
     # 2. 建立 ID 映射
     print("\n[步骤 1/4] 建立统一 ID 映射...")
@@ -315,8 +381,8 @@ def main():
     if os.path.exists(temp_id_dir): shutil.rmtree(temp_id_dir)
 
     # 3. 处理数据
-    process_split('train', dataset_root, id_manager, infra_index)
-    process_split('val', dataset_root, id_manager, infra_index)
+    process_split('train', dataset_root, id_manager, normal_infra_index)
+    process_split('val', dataset_root, id_manager, normal_infra_index)
 
     print("\n[步骤 3/4] 处理测试集...")
     test_csv_path = os.path.join(dataset_root, 'raw', 'test.csv')
@@ -337,7 +403,7 @@ def main():
                     mapped_id = id_manager.service_id.get(rc_svc)
                 test_df.at[idx, 'RootCause'] = mapped_id if mapped_id is not None else 0
                 test_df.at[idx, 'FaultCategory'] = id_manager.fault_category.get_or_assign(fc_text) if fc_text else 0
-        process_split('test', dataset_root, id_manager, infra_index, processed_df=test_df)
+        process_split('test', dataset_root, id_manager, fault_infra_index, processed_df=test_df)
 
     id_manager.dump_to(processed_root)
     print(f"\n✨ 所有处理完成！")

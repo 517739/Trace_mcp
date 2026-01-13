@@ -112,7 +112,7 @@ def main():
                             # "data/NormalData/normal_traces.csv",
                             # "data/ServiceFault/all_fault_traces.csv",
                             # "data/NodeFault/all_fault_traces.csv"
-                            "data/NormalData/normal_traces2e5.csv"
+                            "data/NormalData/normal_traces1e5_30s.csv"
                         ],
                         help="需要处理的 CSV 文件列表")
     parser.add_argument("--suffix", default="_mapped", help="输出文件后缀 (例如 _mapped)")
