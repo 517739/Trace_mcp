@@ -391,6 +391,8 @@ class NormalDataFetcher:
                                 # 解析 Span 数据
                                 try: res_obj = json.loads(d.get('resources', '{}'))
                                 except: res_obj = {}
+                                try: att_obj = json.loads(d.get('resources', '{}'))
+                                except: att_obj = {}
                                 try:
                                     s_ms = int(d.get('startTime', 0)) / 1e6
                                     d_ms = int(d.get('duration', 0)) / 1e6
@@ -410,9 +412,9 @@ class NormalDataFetcher:
                                     'EndTimeMs': f"{s_ms + d_ms:.3f}",
                                     'DurationMs': f"{d_ms:.3f}",
                                     'StatusCode': d.get('statusCode'),
-                                    'HttpStatusCode': "",
+                                    'HttpStatusCode': str(att_obj.get('http.status_code') or att_obj.get('rpc.grpc.status_code', '')),
                                     'fault_type': 'normal',
-                                    'fault_instance': 'unknown',
+                                    'fault_instance': "",
                                     'problem_id': 'normal_000'
                                 }
                                 trace_buffer[tid].append(span_obj)
