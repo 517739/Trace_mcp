@@ -1,0 +1,5 @@
+=== Trace_mcp Subprocess ===
+Time: 2026-01-27T21:21:43
+CWD: E:\ZJU\AIOps\Projects\TraDNN\Trace_mcp\app\tools\trace_svnd_diag
+CMD: D:\School\Anaconda\envs\py310\python.exe -u E:\ZJU\AIOps\Projects\TraDNN\Trace_mcp\app\tools\trace_svnd_diag\test_aiops_svnd.py --batch-size 128 --data-root dataset/aiops_svnd --device cuda --limit 50 --model-path dataset/aiops_svnd/1019/aiops_nodectx_multihead.pt --seed 2025
+
