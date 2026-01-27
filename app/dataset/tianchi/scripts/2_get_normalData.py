@@ -66,23 +66,36 @@ logger = logging.getLogger(__name__)
 
 # === 悬浮节点检查 ===
 def check_orphan_root(spans: list) -> bool:
-    """检查 Trace 是否存在断链 (允许最多 1 个悬浮根节点)"""
+    """
+    检查 Trace 是否存在断链与多根
+    找出所有“拓扑根”：即 ParentID 不指向当前 Trace 中任何已知 Span 的节点。(包含三种情况：ParentID为空、ParentID为-1、ParentID指向不存在的ID)
+       """
     if not spans: return False
     
+    # 1. 建立当前 Trace 所有 SpanID 的集合 (白名单)
     span_ids = set()
     for s in spans:
+        # 兼容不同字段名，确保转为字符串并去空
         sid = str(s.get('SpanId', '')).strip()
-        if sid: span_ids.add(sid)
+        if sid: 
+            span_ids.add(sid)
     
-    roots = {"", "nan", "None", "null", "-1", "0"}
-    dangling_count = 0
+    # 如果没有有效 Span ID，直接视为无效
+    if not span_ids: return False
+
+    root_count = 0
     
+    # 2. 遍历所有 Span，统计“拓扑根”的数量
     for s in spans:
         pid = str(s.get('ParentID', '')).strip()
-        if pid not in span_ids and pid not in roots:
-            dangling_count += 1
+        
+        # 核心判定：只要 ParentID 不在 span_ids 里，它就是一个“根”
+        # (这自动涵盖了: pid为 -1, pid为 nan, pid为 null, 以及 pid 指向缺失节点的情况)
+        if pid not in span_ids:
+            root_count += 1
             
-    return dangling_count <= 1
+    # 3. 严格限制：只能有 1 个根
+    return root_count == 1
 
 class NormalDataFetcher:
     def __init__(self, args):
@@ -141,7 +154,7 @@ class NormalDataFetcher:
 
     def fetch_metrics(self, start_ts, end_ts):
         """
-        获取节点指标（修复版）：
+        获取节点指标：
         1. 使用分片查询 (Chunking) 防止 API 自动降采样 (解决 60s 粒度问题)
         2. 统一时间戳单位为纳秒 (防止索引报错)
         3. 结合 Golden Metrics 和 CMS 原始接口 (补全缺失指标)
@@ -246,7 +259,7 @@ class NormalDataFetcher:
                 # 推进到下一个分片
                 current_chunk_start = current_chunk_end
             
-            # === [核心逻辑] 统一重采样与填充 ===
+            # === 统一重采样与填充 ===
             if self.args.interval and self.args.interval > 0 and node_data:
                 try:
                     df = pd.DataFrame.from_dict(node_data, orient='index')
@@ -257,10 +270,6 @@ class NormalDataFetcher:
                         df[col] = pd.to_numeric(df[col], errors='coerce')
                     
                     # 2. 重采样 + 填充策略
-                    # resample: 按 10s 对齐
-                    # mean: 如果该窗口有多个点(极少见)，取平均
-                    # ffill: 前向填充，解决数据稀疏造成的空洞 (把60s的数据铺满到10s)
-                    # fillna(0.0): 解决最开头可能缺失的数据
                     df_resampled = df.resample(f'{self.args.interval}s').mean().ffill().fillna(0.0)
                     
                     # 3. 回填
@@ -429,7 +438,7 @@ class NormalDataFetcher:
                             if sc > 1: is_error = True; break
                         except: pass
                         
-                        # 2. [新增] 检查开始时间是否早于窗口起始时间
+                        # 2. 检查开始时间是否早于窗口起始时间
                         # start_ts 是秒级，StartTimeMs 是字符串毫秒，需转换
                         try:
                             span_start_ms = float(span['StartTimeMs'])
@@ -470,8 +479,8 @@ if __name__ == "__main__":
     parser.add_argument("--interval", type=int, default=30, help="指标重采样间隔(秒)")
     
     # [新增] 参数
-    parser.add_argument("--window-hours", type=float, default=6.0, help="获取故障前多少小时的数据")
-    parser.add_argument("--file-name", type=str, default="4e5_30s_6h_new", help="输出文件名后缀 (例如 '_v1')")
+    parser.add_argument("--window-hours", type=float, default=4.0, help="获取故障前多少小时的数据")
+    parser.add_argument("--file-name", type=str, default="4e5_30s_4h_new", help="输出文件名后缀 (例如 '_v1')")
     
     args = parser.parse_args()
 

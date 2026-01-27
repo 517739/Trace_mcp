@@ -98,7 +98,12 @@ def get_valid_hosts_from_metrics(dataset_root: str, filenames: List[str]) -> Set
     return valid_hosts
 
 # [新增] 过滤无法映射到 Host 的 Traces
-def filter_unmapped_traces(df: pd.DataFrame, valid_hosts: Set[str], trace_col: str = 'TraceID') -> pd.DataFrame:
+def filter_unmapped_traces(
+    df: pd.DataFrame,
+    valid_hosts: Set[str],
+    trace_col: str = 'TraceID',
+    policy: str = 'mask_node',
+) -> pd.DataFrame:
     """
     智能过滤：
     1. NodeName 为空/NaN -> 保留 (视为外部服务或无指标组件，如 inventory)
@@ -139,17 +144,38 @@ def filter_unmapped_traces(df: pd.DataFrame, valid_hosts: Set[str], trace_col: s
         print(f"    -> 所有具名 Host 均校验通过 (空节点已自动豁免)。")
         return df
     
-    print(f"    -> 发现 {len(invalid_named_nodes)} 个具名 Host 无指标 (e.g., {list(invalid_named_nodes)[:3]}) -> 将剔除相关 Trace")
-    
-    # 找出包含无效具名 Node 的 TraceID
-    invalid_traces_mask = df[node_col].isin(invalid_named_nodes)
-    invalid_trace_ids = df.loc[invalid_traces_mask, trace_col].unique()
-    
-    # 过滤
-    filtered_df = df[~df[trace_col].isin(invalid_trace_ids)].copy()
-    
-    print(f"    指标映射检查后: {filtered_df[trace_col].nunique()} traces (剔除 {len(invalid_trace_ids)} 条)")
-    return filtered_df
+    policy = str(policy or 'mask_node').strip().lower()
+    if policy not in ('drop_trace', 'mask_node'):
+        print(f"    ⚠️ 未知 policy={policy}，回退为 mask_node")
+        policy = 'mask_node'
+
+    # 策略1：直接剔除包含无指标 host 的整条 trace（强过滤，容易导致服务词表塌缩）
+    if policy == 'drop_trace':
+        print(f"    -> 发现 {len(invalid_named_nodes)} 个具名 Host 无指标 (e.g., {list(invalid_named_nodes)[:3]}) -> 将剔除相关 Trace")
+        invalid_traces_mask = df[node_col].isin(invalid_named_nodes)
+        invalid_trace_ids = df.loc[invalid_traces_mask, trace_col].unique()
+        filtered_df = df[~df[trace_col].isin(invalid_trace_ids)].copy()
+        print(f"    指标映射检查后: {filtered_df[trace_col].nunique()} traces (剔除 {len(invalid_trace_ids)} 条)")
+        return filtered_df
+
+    # 策略2：不丢 trace，而是把无法映射的 NodeName 置空（更适合天池：指标覆盖不全，但 trace/服务信息仍有价值）
+    print(
+        f"    -> 发现 {len(invalid_named_nodes)} 个具名 Host 无指标 (e.g., {list(invalid_named_nodes)[:3]}) -> 将这些 span 的 NodeName 置空保留 trace"
+    )
+    mask = df[node_col].isin(invalid_named_nodes)
+    affected_traces = int(df.loc[mask, trace_col].nunique())
+    affected_rows = int(mask.sum())
+    df2 = df.copy()
+    df2.loc[mask, node_col] = ""
+    if 'NodeName' in df2.columns:
+        try:
+            df2.loc[mask, 'NodeName'] = ""
+        except Exception:
+            pass
+    print(
+        f"    指标映射处理后: traces={df2[trace_col].nunique()} (受影响 traces={affected_traces}, span行数={affected_rows})"
+    )
+    return df2
 
 # 过滤
 def filter_short_traces(df: pd.DataFrame, trace_col: str, min_spans: int) -> pd.DataFrame:
@@ -647,6 +673,13 @@ def main():
     
     ap.add_argument("--min_trace_spans", type=int, default=MIN_TRACE_SPANS,
                    help="最小trace span数量")
+    ap.add_argument(
+        "--unmapped_host_policy",
+        type=str,
+        default="mask_node",
+        choices=["mask_node", "drop_trace"],
+        help="Host 指标映射不全时的处理策略：mask_node=仅将无法映射的 NodeName 置空(保留trace，推荐天池)；drop_trace=直接剔除包含无效Node的trace(更严格)",
+    )
 
     args = ap.parse_args()
 
@@ -686,10 +719,10 @@ def main():
 
     # [新增] (c) 过滤无指标数据的 Trace
     print(f"  > [Normal Data] 严格过滤：Trace 必须适配 {NORMAL_METRIC_FILE} ...")
-    df_normal = filter_unmapped_traces(df_normal, hosts_normal, 'TraceID')
+    df_normal = filter_unmapped_traces(df_normal, hosts_normal, 'TraceID', policy=args.unmapped_host_policy)
     print(f"  > [Fault Data] 严格过滤：Trace 必须适配 {FAULT_METRIC_FILE} ...")
-    df_service = filter_unmapped_traces(df_service, hosts_fault, 'TraceID')
-    df_node = filter_unmapped_traces(df_node, hosts_fault, 'TraceID')
+    df_service = filter_unmapped_traces(df_service, hosts_fault, 'TraceID', policy=args.unmapped_host_policy)
+    df_node = filter_unmapped_traces(df_node, hosts_fault, 'TraceID', policy=args.unmapped_host_policy)
 
     # 归一化故障类型并筛选
     df_service["fault_type"] = df_service["fault_type"].apply(norm_fault)

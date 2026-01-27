@@ -16,7 +16,7 @@ class ExpConfig(mltk.Config):
     test_batch_size: int = 64
     # Maximum number of traces to evaluate (None or <=0 means no limit)
     max_eval_traces: Optional[int] = None
-    max_epochs: int = 10
+    max_epochs: int = 2
     enable_tqdm: bool = True
     # Debug helpers: set True to print/check NaN/Inf sources and fail fast.
     debug_nan: bool = True
@@ -24,10 +24,10 @@ class ExpConfig(mltk.Config):
     # 数据集根目录（相对工程根目录或绝对路径）
     dataset_root_dir: str = 'dataset/tianchi'
     # 模型权重保存/读取路径：
-    model_path: str = 'save/tracebert/model.pth'
+    model_path: str = 'save/demo/model.pth'
 
     # 报告输出目录（相对 processed 目录或绝对路径）
-    report_dir: str = 'reports_0126'
+    report_dir: str = 'reports_0126_demo'
     include_epoch_in_report_name: bool = True  # 报告文件名中是否包含 epoch 序号
 
     # 模型相关配置
@@ -146,6 +146,15 @@ class ExpConfig(mltk.Config):
         # 评估端固定结构/延迟权重，避免训练期漂移
         eval_alpha: float = 0.7
         eval_beta: float = 0.3
+        # 评估端 anomaly detection 的图级打分方式：
+        # - 'sl'      : alpha*StructNLL + beta*LatencyNLL（旧默认）
+        # - 'slh'     : alpha*StructNLL + beta*LatencyNLL + gamma*HostLoss（适合天池这类 host/infra 注入）
+        # - 'topk_sl' : topK(node_score)（node_score 由节点级结构/时延分数组合得到）
+        # - 'topk_slh': topK(node_score) + gamma*HostLoss（推荐优先尝试）
+        detector_score_mode: str = 'topk_slh'
+        detector_topk: int = 5
+        # 如需固定 host 权重，可设置 eval_gamma；为 None 时使用模型输出 pred['gamma']（Kendall 对应）
+        eval_gamma: Optional[float] = None
 
         # 导出控制
         export_csv: bool = True             # 是否导出每条 trace 的 RCA 结果 CSV

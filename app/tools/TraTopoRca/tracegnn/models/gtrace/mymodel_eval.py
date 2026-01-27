@@ -215,18 +215,15 @@ def evaluate(config: ExpConfig,
                 nll_latency = pred['loss_latency']
 
                 # 组合结构/延迟 NLL；评测阶段可固定 alpha/beta（若在 config.RCA 中提供 eval_alpha/eval_beta）
-                alpha_override = getattr(getattr(config, 'RCA', None), 'eval_alpha', None)
-                beta_override = getattr(getattr(config, 'RCA', None), 'eval_beta', None)
+                rca_cfg = getattr(config, 'RCA', None)
+                alpha_override = getattr(rca_cfg, 'eval_alpha', None)
+                beta_override = getattr(rca_cfg, 'eval_beta', None)
                 alpha_w = float(alpha_override) if alpha_override is not None else float(pred['alpha'])
                 beta_w = float(beta_override) if beta_override is not None else float(pred['beta'])
-                weighted_structure = (alpha_w * nll_structure).item()
-                weighted_latency = (beta_w * nll_latency).item()
-                anomaly_score = weighted_structure + weighted_latency
+                weighted_structure = float((alpha_w * nll_structure).item())
+                weighted_latency = float((beta_w * nll_latency).item())
 
-                anomaly_score_list.append(anomaly_score)
-                graph_label_list.append(int(single_graph_anomaly_label))
-
-                # 节点级分数
+                # 节点级分数（用于 RCA 可视化，也可用于 anomaly detection 的 topK 聚合）
                 if 'node_structure_scores' in pred and 'node_latency_scores' in pred:
                     # 节点级分数：先做每条 trace 内的稳健标准化，再按评测权重组合
                     def _zscore(x: torch.Tensor) -> torch.Tensor:
@@ -250,6 +247,54 @@ def evaluate(config: ExpConfig,
                 else:
                     logger.warning(f"Graph {graph_key}: No node scores in prediction output.")
                     current_node_scores = torch.zeros(single_test_graph.num_nodes(), device=device)
+
+                # ---------------- Anomaly detection graph-level score (configurable) ----------------
+                # NOTE: Kendall weights (alpha/beta/gamma) are learned for balancing TRAINING losses,
+                # but anomaly detection benefits from a score definition that matches the dataset's signal.
+                mode = str(getattr(rca_cfg, 'detector_score_mode', 'sl')).lower() if rca_cfg is not None else 'sl'
+                topk = int(getattr(rca_cfg, 'detector_topk', 5)) if rca_cfg is not None else 5
+                topk = max(1, topk)
+
+                # Host channel contribution (optional)
+                host_loss_val = 0.0
+                try:
+                    if isinstance(pred, dict) and pred.get('loss_host', None) is not None:
+                        v = pred.get('loss_host')
+                        host_loss_val = float(v.item() if hasattr(v, 'item') else float(v))
+                except Exception:
+                    host_loss_val = 0.0
+
+                gamma_override = getattr(rca_cfg, 'eval_gamma', None) if rca_cfg is not None else None
+                try:
+                    gamma_w = float(gamma_override) if gamma_override is not None else float(pred.get('gamma', 0.0))
+                except Exception:
+                    gamma_w = 0.0
+
+                # node topK aggregation (if available)
+                node_topk_score = 0.0
+                try:
+                    if current_node_scores is not None and int(single_test_graph.num_nodes()) > 0:
+                        k = min(int(single_test_graph.num_nodes()), topk)
+                        # Use largest scores; mean over topK for stability.
+                        vals, _ = torch.topk(current_node_scores.float(), k=k, largest=True)
+                        node_topk_score = float(vals.mean().item())
+                except Exception:
+                    node_topk_score = 0.0
+
+                if mode == 'sl':
+                    anomaly_score = weighted_structure + weighted_latency
+                elif mode == 'slh':
+                    anomaly_score = weighted_structure + weighted_latency + gamma_w * host_loss_val
+                elif mode == 'topk_sl':
+                    anomaly_score = node_topk_score
+                elif mode == 'topk_slh':
+                    anomaly_score = node_topk_score + gamma_w * host_loss_val
+                else:
+                    # Backward-compatible fallback
+                    anomaly_score = weighted_structure + weighted_latency
+
+                anomaly_score_list.append(float(anomaly_score))
+                graph_label_list.append(int(single_graph_anomaly_label))
 
                 # 收集trace信息
                 trace_info = {
